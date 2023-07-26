@@ -1,0 +1,464 @@
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <script src="https://unpkg.com/pdf-lib@1.11.0"></script>
+        <script src="https://unpkg.com/downloadjs@1.4.7"></script>
+        <script src="Weapons.js"></script>
+        <script src="SkillFeats.js"></script>
+        <script src="Rogue.js"></script>
+        <script src="AncestryFeats.js"></script>
+        <script src="GeneralFeats.js"></script>
+        <script src="RogueFeats.js"></script>
+        <script src="AbilityRef.js"></script>
+        <script src="Skills.js"></script>
+        <!-- <script type="module" src="index.js"></script> -->
+        
+    </head>
+    <body>
+        <input type="file" id="file">
+        <div id="CharacterInfo"></div>
+        <div id="LevelUpSelection"></div>
+        <button onclick="levelUp()">Level Up</button>
+    </body>
+
+    <script>
+      const { PDFDocument } = PDFLib
+      let pdfDoc
+      const input = document.getElementById('file')
+      input.onchange = e => { 
+        var file = e.target.files[0]; 
+        const reader = new FileReader();
+        reader.readAsArrayBuffer(file);
+        reader.onload = async() => {
+            pdfDoc = await PDFDocument.load(reader.result);
+            const form = pdfDoc.getForm();
+            CreateCharacterInfo(form)
+            createSkillSelect(form)
+            CreateFeatMenu(form)
+            Abilityboost(form)
+        };
+    }
+
+      async function levelUp(){
+        
+        const form = pdfDoc.getForm();
+        let level = Number(form.getTextField("Level").getText()) + 1
+        let levelObj = RogueLevel(String(level))
+        form.getTextField("AC-Item").setText("1")
+        if(levelObj["Abilityboost"]){
+           let ability = document.getElementById("AbilityBoostSelect").value
+           let abilityscore = Number(form.getTextField(`${ability}-Score`).getText())
+           let newScore
+           if(abilityscore >= 18){
+            newScore = abilityscore + 1
+           }
+           else{
+            newScore = abilityscore + 2
+           }
+           form.getTextField(`${ability}-Score`).setText(String(newScore))
+        }
+        if(levelObj["SkillFeat"]){
+            Object.keys(SkillFeatTable).forEach(function(key,index) {
+                console.log(key)
+        })
+        }
+        // console.log(levelObj)
+        let skillIncrease = document.getElementById("SkillIncreaseSelect").value
+        IncreaseSkillProficiency(form,skillIncrease)
+    
+        form.getTextField("Level").setText(String(level))
+        
+        await updateAbilities(form)
+        form.getTextField("Hitpoints-Maximum").setText(String((8*level) +(Number(form.getTextField("Constitution-Modifier").getText()) * level )+8))
+        await updateWeapons(form,level)
+        await updateSkills(form,level)
+        const pdfBytes = await pdfDoc.save()
+
+			// Trigger the browser to download the PDF document
+        download(pdfBytes, "Blank.pdf", "application/pdf");
+      }
+
+      function Abilityboost(form){
+        let level = Number(form.getTextField("Level").getText()) + 1
+        let levelObj = RogueLevel(String(level))
+        if(levelObj["Abilityboost"]){
+        let abilityObj = {}
+        const Abilities = ["Strength","Dexterity","Constitution","Intelligence","Wisdom","Charisma"]
+            Abilities.forEach(element => {
+                let Score = form.getField(`${element}-Score`).getText()
+                abilityObj[element] = Score
+            })
+        createAbilitySelect(abilityObj) 
+
+        }
+           
+        
+      }
+
+
+    function createAbilitySelect(abilityObj){
+        let container = document.getElementById("LevelUpSelection")
+        let select = document.createElement('select') 
+        select.id = "AbilityBoostSelect"
+        Object.keys(abilityObj).forEach(function(key,index) {
+            let option = document.createElement("option")
+                option.text = key
+                select.add(option) 
+        })
+        container.appendChild(select)
+
+    }
+    function createFeatObj(form,level,type){
+        let featObj = {}
+        let table
+        switch(type){
+            case "Ancestry":
+                table = AncestryFeatTable
+                break;
+            case "Skill":
+                table = SkillFeatTable
+                break;
+            case "General":
+                table = GeneralFeatsTable
+                break;
+            case "Rogue":
+                table = RogueFeatsTable
+                break;
+        }
+        Object.keys(table).forEach(function(key,index) {
+            if(table[key].Level <= level){
+                featObj[key] = table[key]
+            }
+        })
+        return featObj
+    }
+    function createFeatSelect(type,level,form){
+        let subcontainer = document.createElement('div')
+        let label = document.createElement('label')
+        label.textContent = `Choose ${type} Feat: `
+        let select = document.createElement('select') 
+        select.id = `${type}FeatSelect`
+        let FeatObj = createFeatObj(form,level,type)
+        Object.keys(FeatObj).forEach(function(key,index) {
+            let option = document.createElement("option")
+            option.text = key
+            select.add(option) 
+        })
+        subcontainer.appendChild(label)
+        subcontainer.appendChild(select)
+        return subcontainer
+    }
+    function CreateFeatMenu(form){
+        let level = Number(form.getTextField("Level").getText()) + 1
+        let levelObj = RogueLevel(String(level))
+        let container = document.getElementById("LevelUpSelection")
+        if(levelObj["SkillFeat"]){
+            let subcontainer = createFeatSelect('Skill',level,form)
+            container.appendChild(subcontainer)
+        }
+        if(levelObj["RogueFeat"]){
+            let subcontainer = createFeatSelect('Rogue',level,form)
+            container.appendChild(subcontainer)   
+        }
+        if(levelObj["GeneralFeat"]){
+            let subcontainer = createFeatSelect('General',level,form)
+            container.appendChild(subcontainer)
+        }
+        if(levelObj["AncestryFeat"]){
+            let subcontainer = createFeatSelect('Ancestry',level,form)
+            container.appendChild(subcontainer)
+        }
+
+    }
+
+      function createSkillSelect(form){
+        let level = Number(form.getTextField("Level").getText()) + 1
+        let levelObj = RogueLevel(String(level))
+        if(levelObj["SkillIncrease"]){
+        
+        let SkillProfObj = createSkillObject(form)
+        let container = document.getElementById("LevelUpSelection")
+        let subcontainer = document.createElement('div')
+        let label = document.createElement('label')
+        label.textContent = `Increase Proficicency: `
+        let select = document.createElement('select') 
+        select.id = "SkillIncreaseSelect"
+        Object.keys(SkillProfObj).forEach(function(key,index) {
+            if(SkillProfObj[key] == "Expert" && level < 7){
+            }
+            else if(key == "Will" || key == "Reflex" || key == "Fortitude" || key == "Perception" || key == "AC" || key == "ClassDC") {}
+            else{
+                let option = document.createElement("option")
+                option.text = key
+                select.add(option) 
+            }
+        })
+        subcontainer.appendChild(label)
+        subcontainer.appendChild(select)
+        container.appendChild(subcontainer)
+        
+        }
+        
+      }
+
+      function CreateCharacterInfo(form){
+        let container = document.getElementById("CharacterInfo")
+        let NameDiv = createText("Name",form.getTextField("Character-Name").getText())
+        let AncestryDiv = createText("Ancestry",form.getTextField("Character-Ancestry").getText())
+        let ClassDiv = createText("Class",form.getTextField("Character-Class").getText().split("(")[0])
+        let levelDiv = createText("Level",form.getTextField("Level").getText())
+        container.appendChild(NameDiv)
+        container.appendChild(AncestryDiv)
+        container.appendChild(ClassDiv)
+        container.appendChild(levelDiv)
+      }
+
+      function createText(Label,Text){
+        let div = document.createElement('div')
+        div.id = `${Label}Div`
+        div.className = "TextField"
+        let span = document.createElement('span')
+        span.id = `${Label}Span`
+        span.innerText = Text
+        let label = document.createElement('label')
+        label.id = `${Label}Label`
+        label.innerText = `${Label}: `
+        div.appendChild(label)
+        div.appendChild(span)
+        return div
+      }
+
+
+
+        async function run(result){
+            
+            const form = pdfDoc.getForm()
+            let level = Number(form.getTextField("Level").getText())
+            console.log(level)
+        }
+        async function updateAbilities(form){
+            const Abilities = ["Strength","Dexterity","Constitution","Intelligence","Wisdom","Charisma"]
+            Abilities.forEach(element => {
+                let Score = form.getField(`${element}-Score`).getText()
+                let Modifier = Math.floor((Number(Score)-10)/2)
+                // console.log(`${element}:  +${Modifier}`)
+                let ModifierForm = form.getTextField(`${element}-Modifier`).setText(String(Modifier))
+                
+            });
+        }
+        async function updateWeapons(form,level){
+            for (let index = 1; index < 3; index++) {
+                
+                let key = `Melee${index}`
+                console.log(GetProficiencyString(form,key))
+                console.log(level)
+                switch(level){
+                    case 7:
+                        switch(GetProficiencyString(form,key)){
+                            case "Expert":
+                                form.getTextField(`${key}-WSpec`).setText("2")
+                                break;
+                            case "Master":
+                                form.getTextField(`${key}-WSpec`).setText("3")
+                                break;  
+                            case "Legendary":
+                                form.getTextField(`${key}-WSpec`).setText("4")
+                                break;
+                        }
+                        break;
+                        
+                    case 15:
+                        switch(GetProficiencyString(form,key)){
+                            case "Expert":
+                                form.getTextField(`${key}-WSpec`).setText("4")
+                                break;
+                            case "Master":
+                                form.getTextField(`${key}-WSpec`).setText("6")
+                                break;  
+                            case "Legendary":
+                                form.getTextField(`${key}-WSpec`).setText("8")
+                                break;
+                        }
+                        break
+                        
+            }
+            
+
+                
+                let name = form.getTextField(`${key}-Name`).getText()
+                console.log(name)
+                let obj = WeaponsMapper(name)
+                form.getTextField(`${key}-Traits`).setText(obj.Trait)
+                console.log(obj.Trait)
+                form.getTextField(`${key}-Damage-Dice`).setText(obj.Damage)
+                form.getCheckBox(`${key}-${obj["Damage Type"]}`).check();
+                form.getTextField(`${key}-Damage-Str`).setText(form.getTextField(`Strength-Modifier`).getText())
+                let Ability = "Dex"
+                let fullAbility =  AbilityRef[Ability]
+                
+                GetProficiency(form,key,level)
+                console.log(fullAbility)
+                let Modifier = form.getTextField(`${fullAbility}-Modifier`).getText()
+                console.log(`${key}-${Modifier}`)
+                let SkillAbility = form.getTextField(`${key}-Skill`).setText(Modifier)
+                form.getTextField(key).setText(
+                    "+" + String(
+                        Number(form.getTextField(`${key}-Skill`).getText()) +
+                        Number(form.getTextField(`${key}-Prof`).getText()) 
+                    )
+                )
+                
+            }
+        }
+
+        
+
+        async function updateSkills(form,level){
+            Object.keys(Skills).forEach(function(key,index) {
+                let Ability = Skills[key]
+                let fullAbility =  AbilityRef[Ability]
+                GetProficiency(form,key,level)
+                // console.log(fullAbility)
+                let Modifier = form.getTextField(`${AbilityRef[Skills[key]]}-Modifier`).getText()
+                // console.log(`${key}-${Modifier}`)
+                let SkillAbility = form.getTextField(`${key}-${Skills[key]}`).setText(Modifier)
+                if(key == "ClassDC" ){
+                    form.getTextField(key).setText(
+                        String(
+                            Number(form.getTextField(`${key}-${Skills[key]}`).getText()) +
+                            Number(form.getTextField(`${key}-Prof`).getText()) + 10
+                        )
+                    )
+                }
+                else if(key == "AC"){
+                    console.log(form.getTextField(`${key}-Item`).getText())
+                    form.getTextField(key).setText(
+                        String(
+                            Number(form.getTextField(`${key}-${Skills[key]}`).getText()) +
+                            Number(form.getTextField(`${key}-Prof`).getText()) + 10
+                            + Number(form.getTextField(`${key}-Item`).getText())
+                        )
+                    )
+                }
+                else{
+                    form.getTextField(key).setText(
+                        String(
+                            Number(form.getTextField(`${key}-${Skills[key]}`).getText()) +
+                            Number(form.getTextField(`${key}-Prof`).getText()) 
+                        )
+                    )
+                }
+            });
+
+
+        } 
+        function createSkillObject(form){
+            let ProfObj = {}
+            Object.keys(Skills).forEach(function(key,index) {
+               let prof = GetProficiencyString(form,key)
+               ProfObj[key] = prof  
+            })
+            // console.log(ProfObj)
+            return ProfObj
+            
+        }
+        function GetProficiencyString(form,key){
+            let profmodifier
+            if(form.getField(`${key}-Legendary`).isChecked()){
+                profmodifier = "Legendary"
+            }
+            else if(form.getField(`${key}-Master`).isChecked()){
+                profmodifier = "Master"
+            }
+            else if(form.getField(`${key}-Expert`).isChecked()){
+                profmodifier = "Expert"
+            }
+            else if(form.getField(`${key}-Trained`).isChecked()){
+                profmodifier = "Trained"
+            }
+            else{
+                profmodifier = "Untrained"
+            }
+            return profmodifier
+        }
+        function IncreaseSkillProficiency(form,key){
+            let SkillProfObj = createSkillObject(form)
+            let current = SkillProfObj[key]
+            let profmodifier
+            if(current == "Master"){
+                form.getCheckBox(`${key}-Legendary`).check()
+            }
+            else if(current == "Expert"){
+                form.getCheckBox(`${key}-Master`).check()
+            }
+            else if(current == "Trained"){
+                form.getCheckBox(`${key}-Expert`).check()
+            }
+            else if(current == "Untrained"){
+                form.getCheckBox(`${key}-Trained`).check()
+            }
+            else{
+                profmodifier = "Untrained"
+            }
+            return profmodifier
+        }
+        function GetProficiency(form,key,level){
+            
+            let profmodifier
+            if(level == 5 && key.includes("Melee")){
+                profmodifier = 4
+                form.getCheckBox(`${key}-Expert`).check()
+            }
+            else if(level == 9 && key == "Fortitude"){
+                profmodifier = 4
+                form.getCheckBox(`${key}-Expert`).check()
+            }
+
+            else if(level == 7 && key =="Reflex" || level == 7 && key =="Perception"){
+                profmodifier = 6 
+                form.getCheckBox(`${key}-Master`).check()
+            }
+            else if(level == 13 && key.includes("Melee")){
+                profmodifier = 6
+                form.getCheckBox(`${key}-Master`).check()
+            }
+            else if(level == 13 && key == "AC"){
+                profmodifier = 4
+                form.getCheckBox(`${key}-Expert`).check()
+            }
+            else if(level == 13 && key =="Perception"){
+                profmodifier = 8 
+                form.getCheckBox(`${key}-Legendary`).check()
+            }
+            else if(level == 13 && key =="Reflex"){
+                profmodifier = 8 
+                form.getCheckBox(`${key}-Legendary`).check()
+            }
+            else if(level == 13 && key == "ClassDC"){
+                profmodifier = 4
+                form.getCheckBox(`${key}-Expert`).check()
+            }
+            else if(form.getField(`${key}-Legendary`).isChecked()){
+                profmodifier = 8
+            }
+            else if(form.getField(`${key}-Master`).isChecked()){
+                profmodifier = 6
+            }
+            else if(form.getField(`${key}-Expert`).isChecked()){
+                profmodifier = 4
+            }
+            else if(form.getField(`${key}-Trained`).isChecked()){
+                profmodifier = 2
+            }
+            else{
+                profmodifier = 0 
+            }
+            if(profmodifier >0){
+                form.getTextField(`${key}-Prof`).setText(String(profmodifier + level))
+            }
+            else{form.getTextField(`${key}-Prof`).setText("0")}
+        }
+
+
+    </script>
+</html>
