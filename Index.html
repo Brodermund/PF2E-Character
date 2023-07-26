@@ -57,10 +57,33 @@
            }
            form.getTextField(`${ability}-Score`).setText(String(newScore))
         }
+        if(level % 2 != 0) {
+            if (level == 1){
+                let feature1 = levelObj["Other"].split(',')[0]
+                let feature2 = levelObj["Other"].split(',')[1]
+                form.getTextField('Feature-1').setText(feature1)
+                form.getTextField('Feature-2').setText(feature2)
+            }
+            else{
+                let feature =  levelObj["Other"]
+                form.getTextField(`Feature-${level}`).setText(feature)
+            }
+        }
         if(levelObj["SkillFeat"]){
-            Object.keys(SkillFeatTable).forEach(function(key,index) {
-                console.log(key)
-        })
+            let feat = document.getElementById("SkillFeatSelect").value
+            form.getTextField(`Feats-Skill-${level}`).setText(feat)
+        }
+        if(levelObj["RogueFeat"]){
+            let feat = document.getElementById("RogueFeatSelect").value
+            form.getTextField(`Feats-Class-${level}`).setText(feat)
+        }
+        if(levelObj["AncestryFeat"]){
+            let feat = document.getElementById("AncestryFeatSelect").value
+            form.getTextField(`Feats-Ancestry-${level}`).setText(feat)
+        }
+        if(levelObj["GeneralFeat"]){
+            let feat = document.getElementById("GeneralFeatSelect").value
+            form.getTextField(`Feats-General-${level}`).setText(feat)
         }
         // console.log(levelObj)
         let skillIncrease = document.getElementById("SkillIncreaseSelect").value
@@ -108,6 +131,32 @@
         container.appendChild(select)
 
     }
+
+    function getChosenFeats(form){
+        let level = Number(form.getTextField("Level").getText())
+        let Feats = []
+        
+        for(let i = level; i>1; i--){
+            let levelObj = RogueLevel(String(i))
+            let SkillFeat = form.getTextField(`Feats-Skill-${i}`).getText()
+            if(levelObj.RogueFeat){
+                let feat = form.getTextField(`Feats-Class-${i}`).getText()
+                Feats.push(feat)
+            }
+            if(levelObj.AncestryFeat){
+                let feat = form.getTextField(`Feats-Ancestry-${i}`).getText()
+                Feats.push(feat)
+            }
+            if(levelObj.GeneralFeat){
+                let feat = form.getTextField(`Feats-General-${i}`).getText()
+                Feats.push(feat)
+            }
+            Feats.push(SkillFeat)
+
+        }
+        return Feats
+
+    }
     function createFeatObj(form,level,type){
         let featObj = {}
         let table
@@ -125,8 +174,12 @@
                 table = RogueFeatsTable
                 break;
         }
+        let featArr = getChosenFeats(form)
         Object.keys(table).forEach(function(key,index) {
-            if(table[key].Level <= level){
+            if(featArr.includes(key)){
+
+            }
+            else if(table[key].Level <= level){
                 featObj[key] = table[key]
             }
         })
@@ -140,6 +193,7 @@
         select.id = `${type}FeatSelect`
         let FeatObj = createFeatObj(form,level,type)
         Object.keys(FeatObj).forEach(function(key,index) {
+            
             let option = document.createElement("option")
             option.text = key
             select.add(option) 
@@ -310,9 +364,6 @@
                 
             }
         }
-
-        
-
         async function updateSkills(form,level){
             Object.keys(Skills).forEach(function(key,index) {
                 let Ability = Skills[key]
@@ -459,6 +510,43 @@
             else{form.getTextField(`${key}-Prof`).setText("0")}
         }
 
+         function CheckFeatPrereq(form,key){
+            let SkillProfObj = createSkillObject(form)
+            let Feat = SkillFeatTable[key]
+            let prereqStr = Feat.Prerequisite
+            
+            let skill = prereqStr.split(":")[1]
+            let prereqpro = ProficicencyToNum(prereqStr.split(":")[0])
+            let current = ProficicencyToNum(SkillProfObj[skill])
+            if(current < prereqpro){
+                return false
+            }
+            else {return true}
+
+            
+
+         }
+         function ProficicencyToNum(string){
+            let proNum
+            switch(string){
+                case "Untrained":
+                    proNum = 0
+                    break;
+                case "Trained":
+                    proNum = 1
+                    break;
+                case "Expert":
+                    proNum = 2
+                    break;
+                case "Master":
+                    proNum = 3
+                    break;
+                case "Legendary":
+                    proNum = 4
+                    break;
+            }
+            return proNum
+         }
 
     </script>
 </html>
