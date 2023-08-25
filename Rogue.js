@@ -4,11 +4,11 @@ const RogueLevelTable = {
        "RogueFeat": true,
        "SkillFeat": true,
        "GeneralFeat": false,
-       "SkillIncrease": true,
+       "SkillIncrease": false,
        "Abilityboost": false,
        "AncestryFeat": true,
        "SneakAttack": "1d6",
-       "Other": "Feint, Surprise Attack"
+       "Other": "Sneak Attack, Surprise Attack"
     },
     "2": {
        "RogueFeat": true,
